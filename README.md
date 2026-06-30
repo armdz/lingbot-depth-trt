@@ -33,7 +33,7 @@ Download the pretrained model from Hugging Face:
 ```bash
 cd python
 mkdir -p ../output/models
-uv run huggingface-cli download \
+uv run hf download \
   robbyant/lingbot-depth-pretrain-vitl-14-v0.5 \
   model.pt \
   --local-dir ../output/models
