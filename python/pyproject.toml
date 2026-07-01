@@ -18,8 +18,8 @@ dependencies = [
     "pyrealsense2",
     "scipy",
     "tensorrt",
-    "torch==2.6.0",
-    "torchvision==0.21.0",
+    "torch",
+    "torchvision",
     "trimesh",
     "viser",
     "xformers==0.0.29.post2",
@@ -27,3 +27,16 @@ dependencies = [
 
 [tool.uv]
 package = false
+# mdm hard-pins torch==2.6.0 / torchvision==0.21.0, but those CUDA builds
+# predate Blackwell (sm_120) support. Override to newer versions pulled
+# from the PyTorch cu128 index so RTX 50-series GPUs work.
+override-dependencies = ["torch==2.11.0", "torchvision==0.26.0"]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128" }]
+torchvision = [{ index = "pytorch-cu128" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

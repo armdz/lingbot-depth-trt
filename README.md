@@ -26,6 +26,27 @@ cd python
 uv pip install -e ../../lingbot-depth
 ```
 
+### Windows
+
+Tested on Windows 11 with an RTX 5070 Ti Laptop GPU (Blackwell, `sm_120`) and a RealSense D435.
+
+```powershell
+cd python
+uv venv --python 3.12
+uv sync
+```
+
+`pyrealsense2` and `tensorrt` install cleanly from PyPI on Windows with no extra
+SDK install required. The one blocker is CUDA support for Blackwell (RTX 50-series)
+GPUs: the upstream `mdm` package hard-pins `torch==2.6.0`/`torchvision==0.21.0`,
+but those CUDA builds predate `sm_120` support and only run on CPU or fail with
+`CUDA error: no kernel image is available for execution on the device`. This
+fork's [`python/pyproject.toml`](python/pyproject.toml) overrides those pins to
+newer versions pulled from the PyTorch cu128 index (`[tool.uv.sources]` +
+`override-dependencies`) so `uv sync` resolves a CUDA build that actually
+supports Blackwell. If you're on an older (non-Blackwell) GPU you can drop that
+override and let `uv sync` install the pinned `torch==2.6.0`.
+
 ## Download Model
 
 Download the pretrained model from Hugging Face:
