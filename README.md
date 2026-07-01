@@ -28,7 +28,10 @@ uv pip install -e ../../lingbot-depth
 
 ### Windows
 
-Tested on Windows 11 with an RTX 5070 Ti Laptop GPU (Blackwell, `sm_120`) and a RealSense D435.
+- Windows 11 Pro build 10.0.26200 (NVIDIA driver version: 591.84, CUDA 13.1)
+- RTX 5070 Ti Laptop GPU (Blackwell, `sm_120`, 12GB RAM)
+- uv 0.11.26 (x86_64-pc-windows-msvc)
+- RealSense D435
 
 ```powershell
 cd python
