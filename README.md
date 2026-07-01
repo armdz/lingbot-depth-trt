@@ -89,6 +89,20 @@ uv run python scripts/live_demo.py \
   --show-display
 ```
 
+Run with a viser point cloud viewer:
+
+```bash
+cd python
+uv run python scripts/live_demo.py \
+  --model ../output/trt_nt1200_fp16/lingbot_depth_nt1200.engine \
+  --realsense auto \
+  --show-viser
+```
+
+Open `http://localhost:8080` in a browser. In the default `--viser-mode both` mode, this is a comparison dashboard with two independent viser viewers. Raw and refined point clouds each have their own coordinate axes, and camera movement in either viewer is synchronized to the other. The raw/refined viewer ports are printed at startup; with the default dashboard port they are normally `8081` and `8082`. Use `--viser-mode raw` or `--viser-mode refined` to start with only one point cloud.
+
+Click a visible point to inspect the matching pixel in both viewers. The `Selection` field shows x/y/z coordinates from the axis origin and distance in meters. `Axis size` adjusts the coordinate frame size and is synchronized between the two viewers in `both` mode.
+
 
 ## Citation
 

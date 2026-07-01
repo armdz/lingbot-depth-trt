@@ -15,6 +15,8 @@ import numpy as np
 import pyrealsense2 as rs
 import torch
 
+from viser_pointcloud_viewer import CameraIntrinsics, ViserPointCloudViewer
+
 
 def depth_to_color(depth: np.ndarray, vmin: float | None = None, vmax: float | None = None) -> np.ndarray:
     valid = np.isfinite(depth) & (depth > 0)
@@ -239,6 +241,16 @@ def write_run_metadata(args: argparse.Namespace, output_dir: Path, camera_info: 
         "backend": "tensorrt",
         "stream": {"width": args.width, "height": args.height, "fps": args.fps},
         "display": args.show_display,
+        "viser": {
+            "enabled": args.show_viser,
+            "host": args.viser_host,
+            "port": args.viser_port,
+            "mode": args.viser_mode,
+            "pointcloud_stride": args.pointcloud_stride,
+            "pointcloud_min_depth": args.pointcloud_min_depth,
+            "pointcloud_max_depth": args.pointcloud_max_depth,
+            "pointcloud_update_hz": args.pointcloud_update_hz,
+        },
     }
     (output_dir / "run_metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
 
@@ -254,7 +266,7 @@ def run_demo(args: argparse.Namespace) -> int:
     output_dir: Path | None = None
     if args.output_dir:
         output_dir = Path(args.output_dir)
-    elif not args.show_display:
+    elif not args.show_display and not args.show_viser:
         output_dir = Path("live_demo_output") / datetime.now().strftime("%Y%m%d_%H%M%S")
     if output_dir:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -268,16 +280,25 @@ def run_demo(args: argparse.Namespace) -> int:
     config.enable_device(serial)
     config.enable_stream(rs.stream.depth, args.width, args.height, rs.format.z16, args.fps)
     config.enable_stream(rs.stream.color, args.width, args.height, rs.format.bgr8, args.fps)
-    profile = pipeline.start(config)
-    align = rs.align(rs.stream.color)
-    depth_sensor = profile.get_device().first_depth_sensor()
-    depth_scale = float(depth_sensor.get_depth_scale())
 
     video_writer: cv2.VideoWriter | None = None
+    pointcloud_viewer: ViserPointCloudViewer | None = None
+    pipeline_started = False
     last_report = time.perf_counter()
     frames = 0
     saved = 0
     try:
+        profile = pipeline.start(config)
+        pipeline_started = True
+        align = rs.align(rs.stream.color)
+        depth_sensor = profile.get_device().first_depth_sensor()
+        depth_scale = float(depth_sensor.get_depth_scale())
+        color_intrinsics = CameraIntrinsics.from_realsense(
+            profile.get_stream(rs.stream.color).as_video_stream_profile().get_intrinsics()
+        )
+        if args.show_viser:
+            pointcloud_viewer = ViserPointCloudViewer(args, color_intrinsics)
+
         for _ in range(args.warmup):
             pipeline.wait_for_frames(args.timeout_ms)
 
@@ -296,6 +317,8 @@ def run_demo(args: argparse.Namespace) -> int:
             refined, infer_s = refiner.refine(color_bgr, depth_m)
             comparison = make_comparison(depth_m, refined, infer_s * 1000.0)
             frames += 1
+            if pointcloud_viewer is not None:
+                pointcloud_viewer.update(color_bgr, depth_m, refined, frames, infer_s * 1000.0)
 
             if video_writer is None:
                 h, w = comparison.shape[:2]
@@ -332,7 +355,10 @@ def run_demo(args: argparse.Namespace) -> int:
     finally:
         if video_writer is not None:
             video_writer.release()
-        pipeline.stop()
+        if pointcloud_viewer is not None:
+            pointcloud_viewer.stop()
+        if pipeline_started:
+            pipeline.stop()
         if args.show_display:
             cv2.destroyAllWindows()
 
@@ -355,6 +381,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup", type=int, default=30)
     parser.add_argument("--timeout-ms", type=int, default=5000)
     parser.add_argument("--show-display", action="store_true", help="Show OpenCV GUI window")
+    parser.add_argument("--show-viser", action="store_true", help="Start a viser web UI with live raw/refined point clouds")
+    parser.add_argument("--viser-host", default="0.0.0.0", help="Host for the viser server")
+    parser.add_argument("--viser-port", type=int, default=8080, help="Port for the viser dashboard/server")
+    parser.add_argument("--viser-mode", choices=["both", "raw", "refined"], default="both", help="Initial viser point cloud display mode")
+    parser.add_argument("--pointcloud-stride", type=int, default=4, help="Use every Nth depth pixel for viser point clouds")
+    parser.add_argument("--pointcloud-min-depth", type=float, default=0.05, help="Minimum depth in meters for viser point clouds")
+    parser.add_argument("--pointcloud-max-depth", type=float, default=2.0, help="Maximum depth in meters for viser point clouds")
+    parser.add_argument("--pointcloud-point-size", type=float, default=0.002, help="Initial viser point size")
+    parser.add_argument("--pointcloud-update-hz", type=float, default=10.0, help="Maximum viser point cloud update rate")
+    parser.add_argument("--pointcloud-precision", choices=["float16", "float32"], default="float32", help="viser point position precision")
     parser.add_argument("--output-dir", default=None, help="Directory for latest_comparison.png and periodic snapshots")
     parser.add_argument("--save-every", type=int, default=30, help="Save numbered PNG every N frames; 0 disables numbered snapshots")
     parser.add_argument("--output-video", default=None, help="Optional video output path")
